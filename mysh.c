@@ -1,21 +1,21 @@
 #include "my_headers.h"
 #include "my_variables.h"
 
-bool get_line(char *line, int line_size);
-char linux_getch();
-void gotoxy(int x, int y);
-int get_current_line_number();
-void clear_line(int current_line_size);
-void close_and_dup(int closer, int duper);
+static inline bool get_line(char *line, int line_size);
+static inline char linux_getch();
+static inline void gotoxy(int x, int y);
+static inline int get_current_line_number();
+static inline void clear_line(int current_line_size);
+static inline void close_and_dup(int closer, int duper);
 
-int run(char *line);
-void forking_CMD_simple(char *line, bool background);
-void forking_CMD_complex(char *line, bool background, int pipes, int redirections);
-void exe_in_child(char *tokens[]);
-int check_color(char *tokens[]);
+static inline int run(char *line);
+static inline void forking_CMD_simple(char *line, bool background);
+static inline void forking_CMD_complex(char *line, bool background, int pipes, int redirections);
+static inline void exe_in_child(char *tokens[]);
+static inline int check_color(char *tokens[]);
 
-void check_backgrounds(bool foreground);
-int tokenize(char *buf, char *delims, char *tokens[]);
+static inline void check_backgrounds(bool foreground);
+static inline int tokenize(char *buf, char *delims, char *tokens[]);
 
 int main() {
   char line[LINE_SIZE];
@@ -27,43 +27,43 @@ int main() {
   for (i = 0; i < BACKGROUNDS; i++) {
     back_children[i] = -1;
     back_commands[i] = (char *)malloc(LINE_SIZE * sizeof(char *));
-    back_commands[i][0] = '\0';
+    memset(back_commands[i], 0, LINE_SIZE * sizeof(char));
   }
 
   for (i = 0; i < PREVIOUSES; i++) {
     previous_commands[i] = (char *)malloc(LINE_SIZE * sizeof(char *));
-    previous_commands[i][0] = '\0';
+    memset(previous_commands[i], 0, LINE_SIZE * sizeof(char));
   }
 
   i = 0;
-  system("clear");
 
   while (true) {
-    char *current_dir = get_current_dir_name();
+    char *current_dir = getcwd(NULL, 0);
     printf("%s $ ", current_dir);
     free(current_dir);
 
-    get_line(line, LINE_SIZE);
-    if (!(valid_cmd = run(line))) {
-      free(back_children);
-      for (i = 0; i < BACKGROUNDS; i++) {
-        free(back_commands[i]);
-      }
-      for (i = 0; i < PREVIOUSES; i++) {
-        free(previous_commands[i]);
-      }
-      return 0;
-    } else if (valid_cmd != NOT_CMD) {
-      if (i >= PREVIOUSES) { //원형으로 쓴다.
-        i = 0;
-      }
-      if (current_previouses < PREVIOUSES) {
-        current_previouses++;
-      }
-      else if (current_previouses >= PREVIOUSES) { //previous_full
-        previous_CMD_end = (i + 1);
-        if (previous_CMD_end >= PREVIOUSES) {
-          previous_CMD_end = 0;
+    if (get_line(line, LINE_SIZE)) {
+      if (!(valid_cmd = run(line))) {
+        free(back_children);
+        for (i = 0; i < BACKGROUNDS; i++) {
+          free(back_commands[i]);
+        }
+        for (i = 0; i < PREVIOUSES; i++) {
+          free(previous_commands[i]);
+        }
+        return 0;
+      } else if (valid_cmd != NOT_CMD) {
+        if (i >= PREVIOUSES) { //원형으로 쓴다.
+          i = 0;
+        }
+        if (current_previouses < PREVIOUSES) {
+          current_previouses++;
+        }
+        else if (current_previouses >= PREVIOUSES) { //previous_full
+          previous_CMD_end = (i + 1);
+          if (previous_CMD_end >= PREVIOUSES) {
+            previous_CMD_end = 0;
+          }
         }
 
         strcpy(previous_commands[i], line);
@@ -75,7 +75,7 @@ int main() {
   }
 }
 
-void clear_line(int current_line_size) {
+static inline void clear_line(int current_line_size) {
   int i = current_line_size;
   int j = 0;
 
@@ -86,7 +86,7 @@ void clear_line(int current_line_size) {
   int stdin_copy;
   struct winsize ws; //터미널 크기 구하기.
 
-  current_dir = get_current_dir_name();
+  current_dir = getcwd(NULL, 0);
   j = strlen(current_dir);
   ioctl(fileno(stdin), TIOCGWINSZ, &ws);
 
@@ -109,7 +109,7 @@ void clear_line(int current_line_size) {
   free(current_dir);
 }
 
-bool get_line(char *line, int line_size) {
+static inline bool get_line(char *line, int line_size) {
   char ch;
   bool del;
 
@@ -252,22 +252,32 @@ bool get_line(char *line, int line_size) {
         putchar(ch);
       } else if (ch == 127) { //백스페이스이면
         if (i > 0) {
-          putchar(ch);
+          putchar('\b');
+          putchar(' ');
+          putchar('\b');
           line[i--] = '\0';
+        }
+        
+        if (i == 0) {
+          line[0] = '\0';
         }
       }
     }
-
+    
     if (ch == '\r' || ch == '\n') {
-      line[i] = '\0';
+      line[i - 1] = '\0';
       break;
     }
   }
-
-  return true;
+  
+  if (line[0]) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
-char linux_getch() {
+static inline char linux_getch() {
   struct termios oldt, newt;
   int ch;
 
@@ -282,12 +292,12 @@ char linux_getch() {
   return ch;
 }
 
-void gotoxy(int x, int y) {
-  printf("\033[%d;%df", y, x);
+static inline void gotoxy(int x, int y) {
+  fprintf(stdout, "\033[%d;%df", y, x);
   fflush(stdout);
 }
 
-int get_current_line_number() {
+static inline int get_current_line_number() {
   char buf[8];
   char line_number[3];
   char cmd[] = "\033[6n";
@@ -311,7 +321,7 @@ int get_current_line_number() {
   return atoi(line_number);
 }
 
-int run(char *line)
+static inline int run(char *line)
 {
   char *line0 = NULL;
   char *line_no_background = NULL;
@@ -328,6 +338,9 @@ int run(char *line)
 
   line0 = (char *)malloc(LINE_SIZE);
   line_no_background = (char *)malloc(LINE_SIZE);
+
+  memset(line0, 0, LINE_SIZE * sizeof(char));
+  memset(line0, 0, LINE_SIZE * sizeof(char));
 
   for (i = 0; i < TOKEN_SIZE; i++) {
     tokens0[i] = NULL;
@@ -385,14 +398,14 @@ int run(char *line)
   strcpy(line_no_background, line0);
   token_count0 = tokenize(line0, delims0, tokens0);
 
-  if (token_count0 < 2) {
+  if (token_count0 < 1) {
     check_backgrounds(true);
     return NOT_CMD;
   } else {
     if (!strcmp(tokens0[0], "exit") || !strcmp(tokens0[0], "quit")) {
       return false;
     } else if (!strcmp(tokens0[0], "cd")) {
-      if (token_count0 == 2) {
+      if (token_count0 == 1) {
         chdir(getenv("HOME"));
       } else {
         chdir(tokens0[1]);
@@ -422,7 +435,7 @@ int run(char *line)
   return true;
 }
 
-void exe_in_child(char *tokens[]) {
+static inline void exe_in_child(char *tokens[]) {
   if (execvp(tokens[0], tokens)) {
     fprintf(stderr, "execute \'%s\' : %s\r\n", tokens[0], strerror(errno));
     exit(-1 * errno);
@@ -431,7 +444,7 @@ void exe_in_child(char *tokens[]) {
   exit(-1);
 }
 
-int check_color(char *tokens[]) {
+static inline int check_color(char *tokens[]) {
   int i = 0;
 
   if (!strcmp(tokens[0], "ls") || !strcmp(tokens[0], "grep")) {
@@ -439,18 +452,18 @@ int check_color(char *tokens[]) {
       if (strstr(tokens[i], "--color")) {
         return -1;
       }
-
-      tokens[i] = (char *)malloc(13);
-      strcpy(tokens[i], "--color=auto");
-
-      return i;
     }
+
+    tokens[i] = (char *)malloc(13);
+    strcpy(tokens[i], "--color=auto");
+
+    return i;
   }
 
   return -1;
 }
 
-void forking_CMD_simple(char *line, bool background) {
+static inline void forking_CMD_simple(char *line, bool background) {
   char *delims = " \t\r\n";
   char *tokens[TOKEN_SIZE];
 
@@ -499,7 +512,7 @@ void forking_CMD_simple(char *line, bool background) {
   }
 }
 
-void forking_CMD_complex(char *line, bool background, int pipes, int redirections) {
+static inline void forking_CMD_complex(char *line, bool background, int pipes, int redirections) {
   char *line1 = NULL;
   char *line2 = NULL;
   char *line3 = NULL;
@@ -546,19 +559,22 @@ void forking_CMD_complex(char *line, bool background, int pipes, int redirection
   }
 
   token_count1 = tokenize(line1, delims1, tokens1);
-  token_count2 = (int *)malloc((token_count1 - 1) * sizeof(int));
+  token_count2 = (int *)malloc(token_count1 * sizeof(int));
 
   delims3 = (char *)malloc(LINE_SIZE);
-  color_CMD_index = (int *)malloc((token_count1 - 1) * sizeof(int));
+  color_CMD_index = (int *)malloc(token_count1 * sizeof(int));
 
-  for (i = 0; i < token_count1 - 1; i++) {
+  memset(delims3, 0, LINE_SIZE * sizeof(char));
+  memset(color_CMD_index, 0, token_count1 * sizeof(int));
+
+  for (i = 0; i < token_count1; i++) {
     strcat(delims3, tokens1[i]);
 
     token_count2[i] = tokenize(tokens1[i], delims2, tokens2[i]);
     color_CMD_index[i] = check_color(tokens2[i]);
   }
 
-  token_count1 = tokenize(line3, delims3, tokens3);
+  token_count3 = tokenize(line3, delims3, tokens3);
 
   /*
   ls| grep c> 1.txt>2.txt를 예로 들면
@@ -617,7 +633,7 @@ void forking_CMD_complex(char *line, bool background, int pipes, int redirection
   }
 
   if (pipes) {
-    for (i = 0; i < pipes; j++) {
+    for (i = 0; i < pipes; i++) {
       if (pipe2(pipe_fd[i], O_NONBLOCK)) {
         for (j = 0; j < redirections; j++) {
           close(redirect_fd[j]);
@@ -637,6 +653,9 @@ void forking_CMD_complex(char *line, bool background, int pipes, int redirection
           close(pipe_fd[j][0]);
           close(pipe_fd[j][1]);
         }
+
+        fprintf(stderr, "pipe : %s(%d)\r\n", strerror(errno), errno);
+        return;
       } else {
         stdout_copy = dup(STDOUT_FILENO);
         close(STDOUT_FILENO);
@@ -647,7 +666,7 @@ void forking_CMD_complex(char *line, bool background, int pipes, int redirection
     }
   }
 
-  for (i = 0; i < token_count1 - 1; i++) {
+  for (i = 0; i < token_count1; i++) {
     if (!pipes) { //파이프 없음, 리다이렉션 있음
       if (!(child = fork())) {
         close_and_dup(STDOUT_FILENO, redirect_fd[redirections - 1]);
@@ -661,7 +680,7 @@ void forking_CMD_complex(char *line, bool background, int pipes, int redirection
         }
         back_children[backs] = child;
 
-        for (j = 0; j < token_count1 - 1; j++) {
+        for (j = 0; j < token_count1; j++) {
           for (k = 0; tokens2[j][k]; k++) {
             strcat(back_commands[backs], tokens2[j][k]);
             strcat(back_commands[backs], " ");
@@ -751,12 +770,12 @@ void forking_CMD_complex(char *line, bool background, int pipes, int redirection
 
   if (color_CMD_index) {
     for (i = 0; i < token_count1; i++) {
-      if (color_CMD_index[i] >= 0) {
+      if (color_CMD_index[i] > 0) {
         free(tokens2[i][color_CMD_index[i]]);
       }
-
-      free(color_CMD_index);
     }
+
+    free(color_CMD_index);
   }
 
   for (i = 0; i < pipes; i++) {
@@ -765,7 +784,7 @@ void forking_CMD_complex(char *line, bool background, int pipes, int redirection
   }
 }
 
-void check_backgrounds(bool foreground) {
+static inline void check_backgrounds(bool foreground) {
   int i = 0;
   int exit_flag = 0;
 
@@ -800,7 +819,7 @@ void check_backgrounds(bool foreground) {
   }
 }
 
-int tokenize(char *buf, char *delims, char *tokens[]) {
+static inline int tokenize(char *buf, char *delims, char *tokens[]) {
   char *token;
   int token_count = 0;
 
@@ -811,11 +830,11 @@ int tokenize(char *buf, char *delims, char *tokens[]) {
     token = strtok(NULL, delims); //첫번째 인자를 NULL로 하면 기존 포인터에서 계속 자르게 된다.
   }
 
-  tokens[token_count++] = NULL;
+  tokens[token_count] = NULL;
   return token_count;
 }
 
-void close_and_dup(int closer, int duper) {
+static inline void close_and_dup(int closer, int duper) {
   if (close(closer)) {
     if (closer) {
       fprintf(stderr, "close stdout : %s\r\n", strerror(errno));
